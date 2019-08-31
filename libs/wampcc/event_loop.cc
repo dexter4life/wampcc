@@ -53,7 +53,7 @@ event_loop::event_loop(kernel* k)
   : m_kernel(k),
     __logger(k->get_logger()),
     m_continue(true),
-    m_thread(&event_loop::eventmain, this)
+    m_thread(&event_loop::eventmain, this), __event_loop_dispatch_alternative(this)
 {
 }
 
@@ -90,20 +90,20 @@ void event_loop::dispatch(std::function<void()> fn)
 
 void event_loop::dispatch(std::chrono::milliseconds delay, timer_fn fn)
 {
-  dispatch(delay, std::make_shared<ev_timer_dispatch>(std::move(fn)));
+	__event_loop_dispatch_alternative.dispatch(delay, std::make_shared<ev_timer_dispatch>(std::move(fn)));
 }
 
 
-void event_loop::dispatch(std::chrono::milliseconds delay,
+void event_loop::event_loop_dispatch::dispatch(std::chrono::milliseconds delay,
                           std::shared_ptr<event> sp)
 {
   auto tp_due = std::chrono::steady_clock::now() + delay;
   auto event = std::make_pair(tp_due, std::move(sp));
 
   {
-    std::lock_guard<std::mutex> guard(m_mutex);
-    m_schedule.insert(std::move(event));
-    m_condvar.notify_one();
+    std::lock_guard<std::mutex> guard(ptr->m_mutex);
+    ptr->m_schedule.insert(std::move(event));
+    ptr->m_condvar.notify_one();
   }
 }
 
@@ -157,7 +157,7 @@ void event_loop::eventloop()
             ev_timer_dispatch* ev2 = dynamic_cast<ev_timer_dispatch*>(ev.get());
             auto repeat_ms = ev2->fn();
             if (repeat_ms.count() > 0)
-              dispatch(repeat_ms, std::move(ev));
+				__event_loop_dispatch_alternative.dispatch(repeat_ms, std::move(ev));
             break;
           }
           case event::kill: {
