@@ -58,7 +58,16 @@ private:
   void eventloop();
   void eventmain();
 
-  void dispatch(std::chrono::milliseconds, std::shared_ptr<event>);
+  //avoid ambiquity use a new parameter
+  struct event_loop_dispatch
+  {
+	  event_loop_dispatch(event_loop *parent) : ptr(parent) {}
+
+	  void dispatch(std::chrono::milliseconds, std::shared_ptr<event>);
+  private:
+	  event_loop *ptr;
+  } __event_loop_dispatch_alternative; 
+  //void dispatch(std::chrono::milliseconds, std::shared_ptr<event>);
 
   kernel* m_kernel;
   logger& __logger; /* name chosen for log macros */
